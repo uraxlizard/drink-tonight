@@ -67,10 +67,12 @@ function PlaceCard({ place, isLoggedIn, openLogin }) {
             className="absolute inset-0 w-full h-full object-cover"
           />
         )}
-        <button className="absolute top-3 right-3 h-9 w-9 rounded-full bg-slate-900/80 text-white shadow-md grid place-items-center hover:scale-105 transition">❤</button>
+        {isLoggedIn && (
+          <button className="absolute top-3 right-3 h-9 w-9 rounded-full bg-slate-900/80 text-white shadow-md grid place-items-center hover:scale-105 transition">❤</button>
+        )}
         <button
           onClick={toggleMute}
-          className="absolute top-3 right-14 h-9 px-3 rounded-full bg-slate-900/80 text-white shadow-md flex items-center gap-1 hover:scale-105 transition"
+          className={`absolute top-3 ${isLoggedIn ? 'right-14' : 'right-3'} h-9 px-3 rounded-full bg-slate-900/80 text-white shadow-md flex items-center gap-1 hover:scale-105 transition`}
         >
           {isMuted ? '🔇' : '🔊'}
         </button>
