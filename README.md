@@ -2,6 +2,25 @@
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
+## Supabase setup
+
+1) Install dependency:
+
+```bash
+npm i @supabase/supabase-js
+```
+
+2) Create a `.env.local` file in the project root with:
+
+```bash
+REACT_APP_SUPABASE_URL=your_supabase_project_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+3) Restart the dev server so CRA picks up the env vars.
+
+We use `src/lib/supabaseClient.js` and call Supabase Auth in `src/components/RegisterModal.jsx` and `src/components/LoginModal.jsx`. `src/App.js` listens to auth state changes to reflect login status.
+
 ## Available Scripts
 
 In the project directory, you can run:
