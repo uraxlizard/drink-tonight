@@ -5,6 +5,7 @@ function RegisterModal({ onClose, onSwitchToLogin, onRegisterSuccess }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [accountType, setAccountType] = useState('normal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,7 +18,7 @@ function RegisterModal({ onClose, onSwitchToLogin, onRegisterSuccess }) {
         email,
         password,
         options: {
-          data: { full_name: fullName },
+          data: { full_name: fullName, accountType },
           emailRedirectTo: window.location.origin,
         },
       });
@@ -47,6 +48,19 @@ function RegisterModal({ onClose, onSwitchToLogin, onRegisterSuccess }) {
             {error}
           </div>
         )}
+         <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Тип акаунт
+          </label>
+          <select
+            className="w-full px-4 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-[#bc13fe] focus:border-transparent"
+            value={accountType}
+            onChange={(e) => setAccountType(e.target.value)}
+          >
+              <option value="normal">Потребителски</option>
+              <option value="business">Фирмен</option>
+          </select>
+        </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
