@@ -1,6 +1,6 @@
 import PlaceCard from './PlaceCard';
 
-function PlacesSection({ places, isLoggedIn, onOpenLogin }) {
+function PlacesSection({ places, isLoggedIn, accountType, userId, onOpenLogin }) {
   return (
     <section id="places" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-8">
@@ -33,7 +33,7 @@ function PlacesSection({ places, isLoggedIn, onOpenLogin }) {
       ) : (
         <div className="mx-auto max-w-md sm:max-w-lg lg:max-w-xl space-y-6 snap-y snap-mandatory">
           {places.map((place) => (
-            <PlaceCard key={place.id} place={place} isLoggedIn={isLoggedIn} openLogin={onOpenLogin} />
+            <PlaceCard key={place.id} place={place} isLoggedIn={isLoggedIn} accountType={accountType} userId={userId} openLogin={onOpenLogin} />
           ))}
         </div>
       )}

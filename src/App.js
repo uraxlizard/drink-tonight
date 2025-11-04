@@ -17,7 +17,10 @@ function App() {
   const [createdAt, setCreatedAt] = useState('');
   const [lastSignInAt, setLastSignInAt] = useState('');
   const [accountType, setAccountType] = useState('normal');
+  const [userId, setUserId] = useState(null);
   const [currentPage, setCurrentPage] = useState(window.location.hash === '#profile' ? 'profile' : 'home');
+  const [reservationNotifications, setReservationNotifications] = useState(0);
+  const [reservationDetails, setReservationDetails] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -25,6 +28,7 @@ function App() {
       if (!isMounted) return;
       const session = data.session;
       setIsLoggedIn(!!session);
+      setUserId(session?.user?.id || null);
       const meta = session?.user?.user_metadata || {};
       const identities = session?.user?.identities || [];
       const identityData = identities[0]?.identity_data || {};
@@ -40,6 +44,7 @@ function App() {
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
+      setUserId(session?.user?.id || null);
       const meta = session?.user?.user_metadata || {};
       const identities = session?.user?.identities || [];
       const identityData = identities[0]?.identity_data || {};
@@ -69,7 +74,7 @@ function App() {
     (async () => {
       const { data, error } = await supabase
         .from('places')
-        .select('id, name, category, rating, distance, image, youtube_id, video, tonight, description, features, working_hours, vip, adult_only')
+        .select('id, name, category, rating, distance, image, youtube_id, video, tonight, description, features, working_hours, vip, adult_only, user_id')
         .order('id', { ascending: true });
       if (error) {
         console.warn('Failed to load places from Supabase, using fallback.', error);
@@ -91,6 +96,7 @@ function App() {
           workingHours: row.working_hours || null,
           vip: !!row.vip,
           adultOnly: !!row.adult_only,
+          userId: row.user_id || null,
         }));
         setPlaces(mapped);
       }
@@ -100,11 +106,83 @@ function App() {
     };
   }, []);
 
+  // Load reservation notifications for business accounts
+  useEffect(() => {
+    if (!isLoggedIn || accountType !== 'business' || !userId) {
+      setReservationNotifications(0);
+      setReservationDetails([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadNotifications = async () => {
+      try {
+        // Get all place IDs owned by this user
+        const { data: placesData, error: placesError } = await supabase
+          .from('places')
+          .select('id')
+          .eq('user_id', userId);
+        
+        if (placesError) throw placesError;
+        
+        if (!placesData || placesData.length === 0) {
+          if (!cancelled) {
+            setReservationNotifications(0);
+            setReservationDetails([]);
+          }
+          return;
+        }
+        
+        const placeIds = placesData.map((p) => p.id);
+        const placesMap = new Map(placesData.map((p) => [p.id, p.name]));
+        
+        // Get pending/confirmed reservations with details
+        const { data, error } = await supabase
+          .from('reservations')
+          .select('id, place_id, name, phone, guests, status, created_at')
+          .in('place_id', placeIds)
+          .in('status', ['pending', 'confirmed'])
+          .order('created_at', { ascending: false })
+          .limit(10);
+        
+        if (error) throw error;
+        
+        if (!cancelled) {
+          const reservationsWithPlaceNames = (data || []).map((res) => ({
+            ...res,
+            placeName: placesMap.get(res.place_id) || 'Място',
+          }));
+          setReservationDetails(reservationsWithPlaceNames);
+          setReservationNotifications(reservationsWithPlaceNames.length);
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('Failed to load reservation notifications', e);
+        if (!cancelled) {
+          setReservationNotifications(0);
+          setReservationDetails([]);
+        }
+      }
+    };
+
+    loadNotifications();
+    
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(loadNotifications, 30000);
+    
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isLoggedIn, accountType, userId]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Navbar
         isLoggedIn={isLoggedIn}
         accountType={accountType}
+        reservationNotifications={reservationNotifications}
+        reservationDetails={reservationDetails}
         onOpenLogin={() => setShowLoginModal(true)}
         onOpenRegister={() => setShowRegisterModal(true)}
         onLogout={() => { supabase.auth.signOut(); window.location.hash = ''; setCurrentPage('home'); }}
@@ -120,7 +198,9 @@ function App() {
         <PlacesSection 
           places={places} 
           isLoggedIn={isLoggedIn} 
-          onOpenLogin={() => setShowLoginModal(true)} 
+          accountType={accountType}
+          userId={userId}
+          onOpenLogin={() => setShowLoginModal(true)}
         />
       )}
 

@@ -49,6 +49,15 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
   const [loadingMyPlaces, setLoadingMyPlaces] = useState(true);
   const [editingPlace, setEditingPlace] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [placeToDelete, setPlaceToDelete] = useState(null);
+
+  // Reservations
+  const [reservations, setReservations] = useState([]);
+  const [loadingReservations, setLoadingReservations] = useState(true);
+  const [reservationsPage, setReservationsPage] = useState(1);
+  const [reservationsTab, setReservationsTab] = useState('active'); // 'active' or 'completed'
 
   const update = (key) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -176,6 +185,8 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
         // Refresh list
         await loadMyPlaces();
       }
+      // Refresh reservations in case place names changed
+      await loadReservations();
       setForm({
         name: '', category: '', rating: '', distance: '', image: '', youtube_id: '', video: '',
         tonight_name: '', tonight_role: '', description: '', features: '', working_hours: '', vip: false, adult_only: false,
@@ -213,7 +224,68 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
 
   useEffect(() => {
     loadMyPlaces();
+    loadReservations();
   }, []);
+
+  const loadReservations = async () => {
+    try {
+      setLoadingReservations(true);
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) {
+        setReservations([]);
+        return;
+      }
+      
+      // Get all places owned by this user (with names)
+      const { data: placesData, error: placesError } = await supabase
+        .from('places')
+        .select('id, name')
+        .eq('user_id', userId);
+      
+      if (placesError) throw placesError;
+      
+      if (!placesData || placesData.length === 0) {
+        setReservations([]);
+        return;
+      }
+      
+      const placeIds = placesData.map((p) => p.id);
+      const placesMap = new Map(placesData.map((p) => [p.id, p.name]));
+      
+      // Get reservations for these places
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('id, place_id, name, phone, guests, status, notes, created_at')
+        .in('place_id', placeIds)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Map place names from placesMap
+      const reservationsWithPlaceNames = (data || []).map((res) => ({
+        ...res,
+        placeName: placesMap.get(res.place_id) || 'Място',
+      }));
+      
+      setReservations(reservationsWithPlaceNames);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('Failed to load reservations', e);
+      setReservations([]);
+    } finally {
+      setLoadingReservations(false);
+    }
+  };
+
+  // Reset page if current page is beyond available pages
+  useEffect(() => {
+    const itemsPerPage = 5;
+    const totalPages = Math.ceil(myPlaces.length / itemsPerPage);
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(1);
+    }
+  }, [myPlaces.length, currentPage]);
 
   const openCreatePlace = () => {
     setEditingPlace(null);
@@ -247,12 +319,32 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
     setShowPlaceModal(true);
   };
 
-  const handleDeletePlace = async (id) => {
+  const confirmDeletePlace = (place) => {
+    setPlaceToDelete(place);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeletePlace = async () => {
+    if (!placeToDelete) return;
+    const id = placeToDelete.id;
     try {
       setDeletingId(id);
       const { error } = await supabase.from('places').delete().eq('id', id);
       if (error) throw error;
-      setMyPlaces((arr) => arr.filter((p) => p.id !== id));
+      setMyPlaces((arr) => {
+        const newArr = arr.filter((p) => p.id !== id);
+        // Reset to page 1 if current page would be empty after deletion
+        const itemsPerPage = 5;
+        const totalPages = Math.ceil(newArr.length / itemsPerPage);
+        if (currentPage > totalPages && totalPages > 0) {
+          setCurrentPage(1);
+        }
+        return newArr;
+      });
+      // Refresh reservations after place deletion
+      await loadReservations();
+      setShowDeleteModal(false);
+      setPlaceToDelete(null);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn('Delete failed', e);
@@ -317,24 +409,267 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
           <div className="text-slate-400 text-sm">Зареждане...</div>
         ) : myPlaces.length === 0 ? (
           <div className="text-slate-400 text-sm">Все още няма добавени места от този акаунт.</div>
-        ) : (
-          <div className="space-y-3">
-            {myPlaces.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-3">
-                <div className="min-w-0">
-                  <div className="text-white font-semibold truncate">{p.name}</div>
-                  <div className="text-slate-400 text-xs">{p.category || '—'} • Рейтинг: {p.rating ?? '—'}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => openEditPlace(p)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700">Редактирай</button>
-                  <button onClick={() => handleDeletePlace(p.id)} disabled={deletingId === p.id} className="px-3 py-1.5 rounded-lg bg-red-600/80 text-white text-sm hover:bg-red-600 disabled:opacity-60">
-                    {deletingId === p.id ? 'Изтриване...' : 'Изтрий'}
+        ) : (() => {
+          const itemsPerPage = 5;
+          const totalPages = Math.ceil(myPlaces.length / itemsPerPage);
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const endIndex = startIndex + itemsPerPage;
+          const paginatedPlaces = myPlaces.slice(startIndex, endIndex);
+
+          return (
+            <>
+              <div className="space-y-3">
+                {paginatedPlaces.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-3">
+                    <div className="min-w-0">
+                      <div className="text-white font-semibold truncate">{p.name}</div>
+                      <div className="text-slate-400 text-xs">{p.category || '—'} • Рейтинг: {p.rating ?? '—'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEditPlace(p)} className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700">Редактирай</button>
+                      <button onClick={() => confirmDeletePlace(p)} disabled={deletingId === p.id} className="px-3 py-1.5 rounded-lg bg-red-600/80 text-white text-sm hover:bg-red-600 disabled:opacity-60">
+                        {deletingId === p.id ? 'Изтриване...' : 'Изтрий'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Предишна
+                  </button>
+                  <span className="text-slate-400 text-sm">
+                    Страница {currentPage} от {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Следваща
                   </button>
                 </div>
-              </div>
-            ))}
+              )}
+            </>
+          );
+        })()}
+      </div>
+
+      <div className="mt-8 bg-slate-900 rounded-2xl border border-slate-800 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-white">Резервации</h2>
+          <div className="flex items-center gap-2">
+            {(() => {
+              const activeCount = reservations.filter((r) => r.status !== 'completed').length;
+              const completedCount = reservations.filter((r) => r.status === 'completed').length;
+              
+              return (
+                <>
+                  <button
+                    onClick={() => {
+                      setReservationsTab('active');
+                      setReservationsPage(1);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                      reservationsTab === 'active'
+                        ? 'bg-[#bc13fe] text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    Активни
+                    {activeCount > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        reservationsTab === 'active'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-700 text-slate-200'
+                      }`}>
+                        {activeCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setReservationsTab('completed');
+                      setReservationsPage(1);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 ${
+                      reservationsTab === 'completed'
+                        ? 'bg-[#bc13fe] text-white'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    Завършени
+                    {completedCount > 0 && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                        reservationsTab === 'completed'
+                          ? 'bg-white/20 text-white'
+                          : 'bg-slate-700 text-slate-200'
+                      }`}>
+                        {completedCount}
+                      </span>
+                    )}
+                  </button>
+                </>
+              );
+            })()}
           </div>
-        )}
+        </div>
+        {loadingReservations ? (
+          <div className="text-slate-400 text-sm">Зареждане...</div>
+        ) : (() => {
+          // Filter reservations based on active tab
+          const filteredReservations = reservationsTab === 'completed'
+            ? reservations.filter((r) => r.status === 'completed')
+            : reservations.filter((r) => r.status !== 'completed');
+
+          if (filteredReservations.length === 0) {
+            return (
+              <div className="text-slate-400 text-sm">
+                {reservationsTab === 'completed'
+                  ? 'Все още няма завършени резервации.'
+                  : 'Все още няма активни резервации за вашите места.'}
+              </div>
+            );
+          }
+
+          const itemsPerPage = 5;
+          const totalPages = Math.ceil(filteredReservations.length / itemsPerPage);
+          const startIndex = (reservationsPage - 1) * itemsPerPage;
+          const endIndex = startIndex + itemsPerPage;
+          const paginatedReservations = filteredReservations.slice(startIndex, endIndex);
+
+          const getStatusColor = (status) => {
+            switch (status) {
+              case 'confirmed':
+                return 'bg-green-500/20 text-green-300 border-green-500/40';
+              case 'completed':
+                return 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+              case 'cancelled':
+                return 'bg-red-500/20 text-red-300 border-red-500/40';
+              default:
+                return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+            }
+          };
+
+          const getStatusText = (status) => {
+            switch (status) {
+              case 'confirmed':
+                return 'Потвърдена';
+              case 'completed':
+                return 'Завършена';
+              case 'cancelled':
+                return 'Отменена';
+              default:
+                return 'Изчаква';
+            }
+          };
+
+          const handleMarkCompleted = async (reservationId) => {
+            try {
+              const { error } = await supabase
+                .from('reservations')
+                .update({ status: 'completed' })
+                .eq('id', reservationId);
+              
+              if (error) throw error;
+              
+              // Refresh reservations
+              await loadReservations();
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn('Failed to mark reservation as completed', e);
+            }
+          };
+
+          return (
+            <>
+              <div className="space-y-3">
+                {paginatedReservations.map((reservation) => (
+                  <div key={reservation.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-white font-semibold text-base">{reservation.name}</div>
+                      </div>
+                      <span className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusColor(reservation.status)}`}>
+                        {getStatusText(reservation.status)}
+                      </span>
+                    </div>
+                    <div className="mb-3 pb-3 border-b border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-sm">За място:</span>
+                        <span className="text-[#bc13fe] font-semibold text-sm">{reservation.placeName || 'Място'}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-slate-400">Телефон:</span>{' '}
+                        <span className="text-slate-200">{reservation.phone}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Хора:</span>{' '}
+                        <span className="text-slate-200">{reservation.guests}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-slate-400">Дата:</span>{' '}
+                        <span className="text-slate-200">
+                          {new Date(reservation.created_at).toLocaleString('bg-BG', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      {reservation.notes && (
+                        <div className="col-span-2 mt-2">
+                          <span className="text-slate-400">Бележки:</span>{' '}
+                          <span className="text-slate-200">{reservation.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                    {reservationsTab === 'active' && reservation.status !== 'completed' && (
+                      <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+                        <button
+                          onClick={() => handleMarkCompleted(reservation.id)}
+                          className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all font-semibold text-sm"
+                        >
+                          Завършена
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setReservationsPage((prev) => Math.max(1, prev - 1))}
+                    disabled={reservationsPage === 1}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Предишна
+                  </button>
+                  <span className="text-slate-400 text-sm">
+                    Страница {reservationsPage} от {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setReservationsPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={reservationsPage === totalPages}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-white text-sm hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Следваща
+                  </button>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {showPlaceModal && (
@@ -469,6 +804,34 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
                 <button type="submit" disabled={pmSaving} className="px-4 py-2 rounded-lg bg-[#bc13fe] text-white hover:brightness-110 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed">{pmSaving ? 'Запис...' : 'Запази'}</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && placeToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 md:p-8 relative border border-slate-800">
+            <button onClick={() => { setShowDeleteModal(false); setPlaceToDelete(null); }} className="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">×</button>
+            <h3 className="text-xl font-bold text-white mb-4">Потвърждение за изтриване</h3>
+            <p className="text-slate-300 mb-6">
+              Сигурни ли сте, че искате да изтриете мястото <strong className="text-white">{placeToDelete.name}</strong>? Това действие не може да бъде отменено.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowDeleteModal(false); setPlaceToDelete(null); }}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 text-sm"
+              >
+                Отмени
+              </button>
+              <button
+                onClick={handleDeletePlace}
+                disabled={deletingId === placeToDelete.id}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {deletingId === placeToDelete.id ? 'Изтриване...' : 'Изтрий'}
+              </button>
+            </div>
           </div>
         </div>
       )}
