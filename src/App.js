@@ -3,6 +3,9 @@ import Navbar from './components/Navbar';
 import PlacesSection from './components/PlacesSection';
 import ProfilePage from './components/ProfilePage';
 import BusinessProfilePage from './components/BusinessProfilePage';
+import AboutUsPage from './components/AboutUsPage';
+import ContactPage from './components/ContactPage';
+import MapPage from './components/MapPage';
 import RegisterModal from './components/RegisterModal';
 import LoginModal from './components/LoginModal';
 import Footer from './components/Footer';
@@ -18,7 +21,17 @@ function App() {
   const [lastSignInAt, setLastSignInAt] = useState('');
   const [accountType, setAccountType] = useState('normal');
   const [userId, setUserId] = useState(null);
-  const [currentPage, setCurrentPage] = useState(window.location.hash === '#profile' ? 'profile' : 'home');
+
+  const getPageFromHash = () => {
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#profile')) return 'profile';
+    if (hash.startsWith('#about')) return 'about';
+    if (hash.startsWith('#contact')) return 'contact';
+    if (hash.startsWith('#map')) return 'map';
+    return 'home';
+  };
+
+  const [currentPage, setCurrentPage] = useState(getPageFromHash());
   const [reservationNotifications, setReservationNotifications] = useState(0);
   const [reservationDetails, setReservationDetails] = useState([]);
 
@@ -58,7 +71,7 @@ function App() {
       const normalized = acc === 'business' || acc === 'firm' ? 'business' : 'normal';
       setAccountType(normalized);
     });
-    const onHash = () => setCurrentPage(window.location.hash === '#profile' ? 'profile' : 'home');
+    const onHash = () => setCurrentPage(getPageFromHash());
     window.addEventListener('hashchange', onHash);
     return () => {
       isMounted = false;
@@ -190,14 +203,30 @@ function App() {
 
       {currentPage === 'profile' && isLoggedIn ? (
         accountType === 'business' ? (
-          <BusinessProfilePage fullName={fullName} email={email} lastSignInAt={lastSignInAt} accountType={accountType} />
+          <BusinessProfilePage
+            fullName={fullName}
+            email={email}
+            lastSignInAt={lastSignInAt}
+            accountType={accountType}
+          />
         ) : (
-          <ProfilePage fullName={fullName} email={email} lastSignInAt={lastSignInAt} accountType={accountType} />
+          <ProfilePage
+            fullName={fullName}
+            email={email}
+            lastSignInAt={lastSignInAt}
+            accountType={accountType}
+          />
         )
+      ) : currentPage === 'about' ? (
+        <AboutUsPage />
+      ) : currentPage === 'contact' ? (
+        <ContactPage />
+      ) : currentPage === 'map' ? (
+        <MapPage />
       ) : (
-        <PlacesSection 
-          places={places} 
-          isLoggedIn={isLoggedIn} 
+        <PlacesSection
+          places={places}
+          isLoggedIn={isLoggedIn}
           accountType={accountType}
           userId={userId}
           onOpenLogin={() => setShowLoginModal(true)}

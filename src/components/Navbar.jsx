@@ -42,6 +42,7 @@ function Navbar({ isLoggedIn, accountType, reservationNotifications, reservation
             </span>
             <div className="hidden md:flex items-center space-x-6">
               <a href="#" className={linkClass('')}>НАЧАЛО</a>
+              <a href="#map" className={linkClass('#map')}>МЕСТА</a>
               <a href="#about" className={linkClass('#about')}>ЗА НАС</a>
               <a href="#contact" className={linkClass('#contact')}>КОНТАКТИ</a>
             </div>
