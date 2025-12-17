@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
-function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
+function BusinessProfilePage({ fullName, email, lastSignInAt, accountType, activeTab = 'settings' }) {
   // Profile-like settings
   const [nameInput, setNameInput] = useState(fullName || '');
   const [savingName, setSavingName] = useState(false);
@@ -77,7 +78,7 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
       if (error) throw error;
       setNameMsg('Името е обновено успешно.');
     } catch (err) {
-      setNameMsg('Грешка при запис: ' + (err?.message || 'Опитайте отново.'));
+      setNameMsg('Грешка при запис: ' + translateError(err));
     } finally {
       setSavingName(false);
     }
@@ -104,7 +105,7 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
       setPassMsg('Паролата е сменена успешно.');
       setTimeout(() => setShowPassModal(false), 600);
     } catch (err) {
-      setPassMsg('Грешка при смяна на парола: ' + (err?.message || 'Опитайте отново.'));
+      setPassMsg('Грешка при смяна на парола: ' + translateError(err));
     } finally {
       setSavingPass(false);
     }
@@ -177,7 +178,6 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
         // Refresh list
         await loadMyPlaces();
         setEditingPlace(null);
-        setShowPlaceModal(false);
       } else {
         const { error } = await supabase.from('places').insert(payload);
         if (error) throw error;
@@ -185,6 +185,8 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
         // Refresh list
         await loadMyPlaces();
       }
+      // Close modal after successful save (create or edit)
+      setShowPlaceModal(false);
       // Refresh reservations in case place names changed
       await loadReservations();
       setForm({
@@ -192,7 +194,7 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
         tonight_name: '', tonight_role: '', description: '', features: '', working_hours: '', vip: false, adult_only: false,
       });
     } catch (err) {
-      setMsg('Грешка при запис: ' + (err?.message || 'Опитайте отново.'));
+      setMsg('Грешка при запис: ' + translateError(err));
     } finally {
       setSaving(false);
     }
@@ -353,9 +355,49 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
     }
   };
 
+  const handleTabChange = (tab) => {
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#profile/${tab}`;
+    }
+  };
+
   return (
     <section id="business-profile" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <h1 className="text-3xl font-extrabold text-white mb-6">Бизнес профил</h1>
+
+      {/* Tab Navigation */}
+      <div className="mb-6 flex gap-2 border-b border-slate-800">
+        <button
+          onClick={() => handleTabChange('settings')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'settings'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Настройки
+        </button>
+        <button
+          onClick={() => handleTabChange('places')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'places'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Моите места
+        </button>
+        <button
+          onClick={() => handleTabChange('reservations')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'reservations'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Резервации
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 bg-slate-900 rounded-2xl border border-slate-800 p-5">
@@ -375,8 +417,9 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
-            <h2 className="text-lg font-bold text-white mb-4">Настройки на профила</h2>
+          {activeTab === 'settings' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <h2 className="text-lg font-bold text-white mb-4">Настройки на профила</h2>
             <form className="grid grid-cols-1 sm:grid-cols-3 gap-3" onSubmit={handleSaveName}>
               <div className="sm:col-span-2">
                 <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">Име и фамилия</label>
@@ -397,14 +440,16 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
             <div className="mt-6 flex items-center gap-3">
               <button onClick={() => setShowPassModal(true)} className="px-4 py-2 rounded-lg bg-[#bc13fe] text-white hover:brightness-110 transition-all font-semibold">Смени парола</button>
               <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-all font-semibold">Метод на плащане</button>
-              <button onClick={openCreatePlace} className="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-all font-semibold">Добави място</button>
             </div>
           </div>
-        </div>
-      </div>
+          )}
 
-      <div className="mt-8 bg-slate-900 rounded-2xl border border-slate-800 p-5">
-        <h2 className="text-lg font-bold text-white mb-4">Моите места</h2>
+          {activeTab === 'places' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white">Моите места</h2>
+                <button onClick={openCreatePlace} className="px-4 py-2 rounded-lg bg-[#bc13fe] text-white hover:brightness-110 transition-all font-semibold">Добави място</button>
+              </div>
         {loadingMyPlaces ? (
           <div className="text-slate-400 text-sm">Зареждане...</div>
         ) : myPlaces.length === 0 ? (
@@ -458,11 +503,13 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
             </>
           );
         })()}
-      </div>
+            </div>
+          )}
 
-      <div className="mt-8 bg-slate-900 rounded-2xl border border-slate-800 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-white">Резервации</h2>
+          {activeTab === 'reservations' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-white">Резервации</h2>
           <div className="flex items-center gap-2">
             {(() => {
               const activeCount = reservations.filter((r) => r.status !== 'completed').length;
@@ -670,6 +717,9 @@ function BusinessProfilePage({ fullName, email, lastSignInAt, accountType }) {
             </>
           );
         })()}
+            </div>
+          )}
+        </div>
       </div>
 
       {showPlaceModal && (

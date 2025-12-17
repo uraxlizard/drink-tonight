@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
-function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameChange }) {
+function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameChange, activeTab = 'settings' }) {
   const [nameInput, setNameInput] = useState(fullName || '');
   const [savingName, setSavingName] = useState(false);
   const [nameMsg, setNameMsg] = useState('');
@@ -35,7 +36,7 @@ function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameCha
       onFullNameChange?.(nameInput.trim());
       setNameMsg('Името е обновено успешно.');
     } catch (err) {
-      setNameMsg('Грешка при запис: ' + (err?.message || 'Опитайте отново.'));
+      setNameMsg('Грешка при запис: ' + translateError(err));
     } finally {
       setSavingName(false);
     }
@@ -62,7 +63,7 @@ function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameCha
       setPassMsg('Паролата е сменена успешно.');
       setTimeout(() => setShowPassModal(false), 600);
     } catch (err) {
-      setPassMsg('Грешка при смяна на парола: ' + (err?.message || 'Опитайте отново.'));
+      setPassMsg('Грешка при смяна на парола: ' + translateError(err));
     } finally {
       setSavingPass(false);
     }
@@ -98,9 +99,49 @@ function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameCha
       setPmSaving(false);
     }
   };
+  const handleTabChange = (tab) => {
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#profile/${tab}`;
+    }
+  };
+
   return (
     <section id="profile" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <h1 className="text-3xl font-extrabold text-white mb-6">Профил</h1>
+
+      {/* Tab Navigation */}
+      <div className="mb-6 flex gap-2 border-b border-slate-800">
+        <button
+          onClick={() => handleTabChange('settings')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'settings'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Настройки
+        </button>
+        <button
+          onClick={() => handleTabChange('reservations')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'reservations'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Резервации
+        </button>
+        <button
+          onClick={() => handleTabChange('favorites')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${
+            activeTab === 'favorites'
+              ? 'text-[#bc13fe] border-[#bc13fe]'
+              : 'text-slate-400 border-transparent hover:text-slate-200'
+          }`}
+        >
+          Любими
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 bg-slate-900 rounded-2xl border border-slate-800 p-5">
@@ -120,24 +161,29 @@ function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameCha
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-white">Любими</h2>
-              <span className="text-slate-400 text-sm">скоро</span>
+          {activeTab === 'favorites' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-white">Любими места</h2>
+                <span className="text-slate-400 text-sm">скоро</span>
+              </div>
+              <p className="text-slate-400 text-sm">Все още няма любими места.</p>
             </div>
-            <p className="text-slate-400 text-sm">Все още няма любими места.</p>
-          </div>
+          )}
 
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-white">Моите резервации</h2>
-              <span className="text-slate-400 text-sm">скоро</span>
+          {activeTab === 'reservations' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-white">Моите резервации</h2>
+                <span className="text-slate-400 text-sm">скоро</span>
+              </div>
+              <p className="text-slate-400 text-sm">Нямаш активни резервации.</p>
             </div>
-            <p className="text-slate-400 text-sm">Нямаш активни резервации.</p>
-          </div>
+          )}
 
-          <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
-            <h2 className="text-lg font-bold text-white mb-4">Настройки на профила</h2>
+          {activeTab === 'settings' && (
+            <div className="bg-slate-900 rounded-2xl border border-slate-800 p-5">
+              <h2 className="text-lg font-bold text-white mb-4">Настройки на профила</h2>
             <form className="grid grid-cols-1 sm:grid-cols-3 gap-3" onSubmit={handleSaveName}>
               <div className="sm:col-span-2">
                 <label className="block text-xs uppercase tracking-wide text-slate-400 mb-1">Име и фамилия</label>
@@ -160,6 +206,7 @@ function ProfilePage({ fullName, email, lastSignInAt, accountType, onFullNameCha
               <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-all font-semibold">Метод на плащане</button>
             </div>
           </div>
+          )}
         </div>
       </div>
 

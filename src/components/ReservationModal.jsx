@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
 function ReservationModal({ onClose, place, onSuccess }) {
   const [name, setName] = useState('');
@@ -52,7 +53,7 @@ function ReservationModal({ onClose, place, onSuccess }) {
         onClose();
       }, 1500);
     } catch (err) {
-      setError(err.message || 'Грешка при изпращане на резервацията. Опитайте отново.');
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }

@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
 function PlaceCard({ place, isLoggedIn, accountType, userId, openLogin }) {
   const videoRef = useRef(null);
   const iframeRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
+  const [showDetails, setShowDetails] = useState(false);
   const [showReservationForm, setShowReservationForm] = useState(false);
   const [reservationName, setReservationName] = useState('');
   const [reservationPhone, setReservationPhone] = useState('');
@@ -90,7 +92,7 @@ function PlaceCard({ place, isLoggedIn, accountType, userId, openLogin }) {
         setShowReservationForm(false);
       }, 2000);
     } catch (err) {
-      setReservationError(err.message || 'Грешка при изпращане на резервацията. Опитайте отново.');
+      setReservationError(translateError(err));
     } finally {
       setReservationLoading(false);
     }
@@ -169,7 +171,9 @@ function PlaceCard({ place, isLoggedIn, accountType, userId, openLogin }) {
             Категория: {place.category}
           </span>
         </div>
-        <p className="mt-2 text-slate-300 line-clamp-2">{place.description}</p>
+        <p className={`mt-2 text-slate-300 ${showDetails ? '' : 'line-clamp-2'}`}>
+          {place.description}
+        </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {place.features.map((feature, index) => (
             <span
@@ -180,17 +184,42 @@ function PlaceCard({ place, isLoggedIn, accountType, userId, openLogin }) {
             </span>
           ))}
         </div>
-        <div className="mt-5 flex items-center justify-between">
-          <div className="text-sm text-slate-400">Работно време: {place.workingHours}</div>
-          {!(accountType === 'business' && userId && place.userId === userId) && (
-            <button
-              onClick={() => (isLoggedIn ? setShowReservationForm(!showReservationForm) : openLogin())}
-              className="px-4 py-2 rounded-lg bg-[#bc13fe] text-white hover:brightness-110 transition-all font-semibold"
-            >
-              {showReservationForm ? 'Затвори' : 'Резервирай'}
-            </button>
-          )}
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {!(accountType === 'business' && userId && place.userId === userId) && (
+              <button
+                onClick={() => (isLoggedIn ? setShowReservationForm(!showReservationForm) : openLogin())}
+                className="px-4 py-2 rounded-lg bg-[#bc13fe] text-white hover:brightness-110 transition-all font-semibold"
+              >
+                {showReservationForm ? 'Затвори' : 'Резервирай'}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDetails((prev) => !prev)}
+            className="px-4 py-2 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 text-sm font-semibold transition-all"
+          >
+            {showDetails ? 'Скрий детайли' : 'Виж детайли'}
+          </button>
         </div>
+
+        {showDetails && (
+          <div className="mt-4 pt-4 border-t border-slate-800 text-sm text-slate-300 space-y-2">
+            {place.workingHours && (
+              <div>
+                <span className="font-semibold text-slate-200">Работно време: </span>
+                <span>{place.workingHours}</span>
+              </div>
+            )}
+            {place.tonight && (
+              <div>
+                <span className="font-semibold text-slate-200">Тази вечер: </span>
+                <span>{place.tonight.details || place.tonight.name}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {showReservationForm && isLoggedIn && (
           <div className="mt-5 pt-5 border-t border-slate-800">

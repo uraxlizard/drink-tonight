@@ -31,7 +31,15 @@ function Navbar({ isLoggedIn, accountType, reservationNotifications, reservation
   const linkBase = 'transition-colors font-semibold';
   const inactive = 'text-slate-300 hover:text-[#ec4899]';
   const active = 'text-[#bc13fe]';
-  const linkClass = (hash) => `${linkBase} ${currentHash === hash || (hash === '' && (currentHash === '' || currentHash === '#')) ? active : inactive}`;
+  const linkClass = (hash) => {
+    // For empty hash, check if currentHash is empty or just '#'
+    if (hash === '') {
+      return `${linkBase} ${currentHash === '' || currentHash === '#' ? active : inactive}`;
+    }
+    // For other hashes, check if currentHash starts with the hash (to support sub-routes like #profile/settings)
+    const isActive = currentHash.startsWith(hash);
+    return `${linkBase} ${isActive ? active : inactive}`;
+  };
   return (
     <nav className="bg-slate-900/80 backdrop-blur shadow-md sticky top-0 z-50 border-b border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

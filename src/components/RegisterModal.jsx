@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
 function RegisterModal({ onClose, onSwitchToLogin, onRegisterSuccess }) {
   const [fullName, setFullName] = useState('');
@@ -26,7 +27,7 @@ function RegisterModal({ onClose, onSwitchToLogin, onRegisterSuccess }) {
       onRegisterSuccess?.();
       onClose();
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }

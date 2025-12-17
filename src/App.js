@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import Navbar from './components/Navbar';
 import PlacesSection from './components/PlacesSection';
 import ProfilePage from './components/ProfilePage';
@@ -12,15 +13,13 @@ import Footer from './components/Footer';
 import { supabase } from './lib/supabaseClient';
 
 function App() {
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [createdAt, setCreatedAt] = useState('');
-  const [lastSignInAt, setLastSignInAt] = useState('');
-  const [accountType, setAccountType] = useState('normal');
-  const [userId, setUserId] = useState(null);
+  const dispatch = useDispatch();
+  const {
+    ui: { showRegisterModal, showLoginModal, currentPage },
+    auth: { isLoggedIn, fullName, email, lastSignInAt, accountType, userId },
+    places: { list: places },
+    notifications: { reservationNotifications, reservationDetails }
+  } = useSelector((state) => state);
 
   const getPageFromHash = () => {
     const hash = window.location.hash || '';
@@ -31,57 +30,83 @@ function App() {
     return 'home';
   };
 
-  const [currentPage, setCurrentPage] = useState(getPageFromHash());
-  const [reservationNotifications, setReservationNotifications] = useState(0);
-  const [reservationDetails, setReservationDetails] = useState([]);
+  const getProfileTab = (accType) => {
+    const hash = window.location.hash || '';
+    if (hash.startsWith('#profile/')) {
+      const tab = hash.replace('#profile/', '');
+      // For business accounts: settings, places, reservations
+      // For normal accounts: settings, reservations, favorites
+      const validTabs = accType === 'business' 
+        ? ['settings', 'places', 'reservations']
+        : ['settings', 'reservations', 'favorites'];
+      return validTabs.includes(tab) ? tab : 'settings';
+    }
+    return 'settings'; // default tab
+  };
+
+  // Initialize currentPage from hash on mount
+  useEffect(() => {
+    dispatch({ type: 'ui/setCurrentPage', payload: getPageFromHash() });
+  }, [dispatch]);
 
   useEffect(() => {
     let isMounted = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!isMounted) return;
       const session = data.session;
-      setIsLoggedIn(!!session);
-      setUserId(session?.user?.id || null);
       const meta = session?.user?.user_metadata || {};
       const identities = session?.user?.identities || [];
       const identityData = identities[0]?.identity_data || {};
       const nameFromMeta = meta.full_name || meta.fullName || meta.name;
       const name = nameFromMeta || identityData.full_name || identityData.name || '';
-      setFullName(name);
-      setEmail(session?.user?.email || identityData.email || meta.email || '');
-      setCreatedAt(session?.user?.created_at || identityData.created_at || '');
-      setLastSignInAt(session?.user?.last_sign_in_at || identityData.last_sign_in_at || '');
       const acc = meta.accountType || identityData.accountType;
       const normalized = acc === 'business' || acc === 'firm' ? 'business' : 'normal';
-      setAccountType(normalized);
+      dispatch({
+        type: 'auth/setSession',
+        payload: {
+          isLoggedIn: !!session,
+          fullName: name,
+          email: session?.user?.email || identityData.email || meta.email || '',
+          createdAt: session?.user?.created_at || identityData.created_at || '',
+          lastSignInAt: session?.user?.last_sign_in_at || identityData.last_sign_in_at || '',
+          accountType: normalized,
+          userId: session?.user?.id || null
+        }
+      });
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
-      setUserId(session?.user?.id || null);
       const meta = session?.user?.user_metadata || {};
       const identities = session?.user?.identities || [];
       const identityData = identities[0]?.identity_data || {};
       const nameFromMeta = meta.full_name || meta.fullName || meta.name;
       const name = nameFromMeta || identityData.full_name || identityData.name || '';
-      setFullName(name);
-      setEmail(session?.user?.email || identityData.email || meta.email || '');
-      setCreatedAt(session?.user?.created_at || identityData.created_at || '');
-      setLastSignInAt(session?.user?.last_sign_in_at || identityData.last_sign_in_at || '');
       const acc = meta.accountType || identityData.accountType;
       const normalized = acc === 'business' || acc === 'firm' ? 'business' : 'normal';
-      setAccountType(normalized);
+      dispatch({
+        type: 'auth/setSession',
+        payload: {
+          isLoggedIn: !!session,
+          fullName: name,
+          email: session?.user?.email || identityData.email || meta.email || '',
+          createdAt: session?.user?.created_at || identityData.created_at || '',
+          lastSignInAt: session?.user?.last_sign_in_at || identityData.last_sign_in_at || '',
+          accountType: normalized,
+          userId: session?.user?.id || null
+        }
+      });
     });
-    const onHash = () => setCurrentPage(getPageFromHash());
+    const onHash = () => {
+      dispatch({ type: 'ui/setCurrentPage', payload: getPageFromHash() });
+    };
     window.addEventListener('hashchange', onHash);
     return () => {
       isMounted = false;
       subscription.subscription?.unsubscribe?.();
       window.removeEventListener('hashchange', onHash);
     };
-  }, []);
+  }, [dispatch]);
 
   // Places data from Supabase
-  const [places, setPlaces] = useState([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -111,19 +136,21 @@ function App() {
           adultOnly: !!row.adult_only,
           userId: row.user_id || null,
         }));
-        setPlaces(mapped);
+        dispatch({ type: 'places/setPlaces', payload: mapped });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dispatch]);
 
   // Load reservation notifications for business accounts
   useEffect(() => {
     if (!isLoggedIn || accountType !== 'business' || !userId) {
-      setReservationNotifications(0);
-      setReservationDetails([]);
+      dispatch({
+        type: 'notifications/setReservations',
+        payload: { count: 0, details: [] }
+      });
       return;
     }
 
@@ -140,8 +167,10 @@ function App() {
         
         if (!placesData || placesData.length === 0) {
           if (!cancelled) {
-            setReservationNotifications(0);
-            setReservationDetails([]);
+            dispatch({
+              type: 'notifications/setReservations',
+              payload: { count: 0, details: [] }
+            });
           }
           return;
         }
@@ -165,15 +194,22 @@ function App() {
             ...res,
             placeName: placesMap.get(res.place_id) || 'Място',
           }));
-          setReservationDetails(reservationsWithPlaceNames);
-          setReservationNotifications(reservationsWithPlaceNames.length);
+          dispatch({
+            type: 'notifications/setReservations',
+            payload: {
+              count: reservationsWithPlaceNames.length,
+              details: reservationsWithPlaceNames
+            }
+          });
         }
       } catch (e) {
         // eslint-disable-next-line no-console
         console.warn('Failed to load reservation notifications', e);
         if (!cancelled) {
-          setReservationNotifications(0);
-          setReservationDetails([]);
+          dispatch({
+            type: 'notifications/setReservations',
+            payload: { count: 0, details: [] }
+          });
         }
       }
     };
@@ -187,7 +223,7 @@ function App() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isLoggedIn, accountType, userId]);
+  }, [isLoggedIn, accountType, userId, dispatch]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -196,9 +232,14 @@ function App() {
         accountType={accountType}
         reservationNotifications={reservationNotifications}
         reservationDetails={reservationDetails}
-        onOpenLogin={() => setShowLoginModal(true)}
-        onOpenRegister={() => setShowRegisterModal(true)}
-        onLogout={() => { supabase.auth.signOut(); window.location.hash = ''; setCurrentPage('home'); }}
+        onOpenLogin={() => dispatch({ type: 'ui/showLoginModal' })}
+        onOpenRegister={() => dispatch({ type: 'ui/showRegisterModal' })}
+        onLogout={() => {
+          supabase.auth.signOut();
+          window.location.hash = '';
+          dispatch({ type: 'auth/logout' });
+          dispatch({ type: 'ui/setCurrentPage', payload: 'home' });
+        }}
       />
 
       {currentPage === 'profile' && isLoggedIn ? (
@@ -208,6 +249,7 @@ function App() {
             email={email}
             lastSignInAt={lastSignInAt}
             accountType={accountType}
+            activeTab={getProfileTab(accountType)}
           />
         ) : (
           <ProfilePage
@@ -215,6 +257,7 @@ function App() {
             email={email}
             lastSignInAt={lastSignInAt}
             accountType={accountType}
+            activeTab={getProfileTab(accountType)}
           />
         )
       ) : currentPage === 'about' ? (
@@ -229,23 +272,75 @@ function App() {
           isLoggedIn={isLoggedIn}
           accountType={accountType}
           userId={userId}
-          onOpenLogin={() => setShowLoginModal(true)}
+          onOpenLogin={() => dispatch({ type: 'ui/showLoginModal' })}
         />
       )}
 
       {showRegisterModal && (
         <RegisterModal
-          onClose={() => setShowRegisterModal(false)}
-          onSwitchToLogin={() => setShowLoginModal(true)}
-          onRegisterSuccess={() => setIsLoggedIn(true)}
+          onClose={() => dispatch({ type: 'ui/hideModals' })}
+          onSwitchToLogin={() => dispatch({ type: 'ui/showLoginModal' })}
+          onRegisterSuccess={async () => {
+            dispatch({ type: 'ui/hideModals' });
+            // Reload session from Supabase to get fresh user data
+            const { data } = await supabase.auth.getSession();
+            const session = data?.session;
+            if (session) {
+              const meta = session.user?.user_metadata || {};
+              const identities = session.user?.identities || [];
+              const identityData = identities[0]?.identity_data || {};
+              const nameFromMeta = meta.full_name || meta.fullName || meta.name;
+              const name = nameFromMeta || identityData.full_name || identityData.name || '';
+              const acc = meta.accountType || identityData.accountType;
+              const normalized = acc === 'business' || acc === 'firm' ? 'business' : 'normal';
+              dispatch({
+                type: 'auth/setSession',
+                payload: {
+                  isLoggedIn: true,
+                  fullName: name,
+                  email: session.user?.email || identityData.email || meta.email || '',
+                  createdAt: session.user?.created_at || identityData.created_at || '',
+                  lastSignInAt: session.user?.last_sign_in_at || identityData.last_sign_in_at || '',
+                  accountType: normalized,
+                  userId: session.user?.id || null
+                }
+              });
+            }
+          }}
         />
       )}
 
       {showLoginModal && (
         <LoginModal
-          onClose={() => setShowLoginModal(false)}
-          onSwitchToRegister={() => setShowRegisterModal(true)}
-          onLoginSuccess={() => setIsLoggedIn(true)}
+          onClose={() => dispatch({ type: 'ui/hideModals' })}
+          onSwitchToRegister={() => dispatch({ type: 'ui/showRegisterModal' })}
+          onLoginSuccess={async () => {
+            dispatch({ type: 'ui/hideModals' });
+            // Reload session from Supabase to get fresh user data
+            const { data } = await supabase.auth.getSession();
+            const session = data?.session;
+            if (session) {
+              const meta = session.user?.user_metadata || {};
+              const identities = session.user?.identities || [];
+              const identityData = identities[0]?.identity_data || {};
+              const nameFromMeta = meta.full_name || meta.fullName || meta.name;
+              const name = nameFromMeta || identityData.full_name || identityData.name || '';
+              const acc = meta.accountType || identityData.accountType;
+              const normalized = acc === 'business' || acc === 'firm' ? 'business' : 'normal';
+              dispatch({
+                type: 'auth/setSession',
+                payload: {
+                  isLoggedIn: true,
+                  fullName: name,
+                  email: session.user?.email || identityData.email || meta.email || '',
+                  createdAt: session.user?.created_at || identityData.created_at || '',
+                  lastSignInAt: session.user?.last_sign_in_at || identityData.last_sign_in_at || '',
+                  accountType: normalized,
+                  userId: session.user?.id || null
+                }
+              });
+            }
+          }}
         />
       )}
 

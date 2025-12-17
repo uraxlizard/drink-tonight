@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { translateError } from '../lib/errorTranslations';
 
 function LoginModal({ onClose, onSwitchToRegister, onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ function LoginModal({ onClose, onSwitchToRegister, onLoginSuccess }) {
       onLoginSuccess?.();
       onClose();
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(translateError(err));
     } finally {
       setLoading(false);
     }
