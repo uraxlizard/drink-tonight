@@ -26,12 +26,16 @@ A modern web application for discovering and reserving nightlife venues (bars, c
   - Features (parking, WiFi, etc.)
   - VIP and 18+ indicators
   - "Tonight" special events/performers
-- **Make Reservations**: Book tables at your favorite venues with:
+- **Make Reservations**: Book tables directly from venue cards with:
   - Guest count selection
-  - Contact information
+  - Contact information (name and phone)
   - Optional notes/special requests
-  - Real-time reservation status
-- **User Profiles**: Manage your account settings and view reservation history
+  - Real-time reservation status updates
+- **User Profiles**: Manage your account settings with tabs for:
+  - Settings (profile info, password, payment methods)
+  - Reservations (view reservation history)
+  - Favorites (coming soon)
+- **Interactive Map**: Browse venues on an interactive map (demo data)
 
 ### For Business Owners
 - **Business Dashboard**: Complete management interface for venue owners
@@ -43,18 +47,21 @@ A modern web application for discovering and reserving nightlife venues (bars, c
   - Set working hours and features
 - **Reservation Management**:
   - View all reservations for owned venues
-  - Filter by status (pending, confirmed, completed, cancelled)
+  - Filter by status (active vs completed)
   - Mark reservations as completed
-  - Real-time notifications for new reservations
+  - Real-time notifications in navbar (updates every 30 seconds)
+  - View reservation details (name, phone, guests, notes, date)
 - **Account Settings**:
   - Update profile information
   - Change password
   - Manage payment methods
 
 ### Technical Features
-- **Authentication**: Secure user registration and login via Supabase Auth
+- **Authentication**: Secure user registration and login via Supabase Auth with account type selection (normal/business)
+- **State Management**: Redux store for UI state, authentication, places, and notifications
+- **Routing**: Hash-based navigation (home, map, about, contact, profile)
 - **Row Level Security (RLS)**: Database-level security policies
-- **Real-time Updates**: Live reservation notifications for business accounts
+- **Real-time Updates**: Live reservation notifications for business accounts (polling every 30 seconds)
 - **Responsive Design**: Mobile-first design with Tailwind CSS
 - **Modern UI**: Dark theme with smooth animations and transitions
 
@@ -62,7 +69,9 @@ A modern web application for discovering and reserving nightlife venues (bars, c
 
 - **Frontend Framework**: React 19.2.0
 - **Build Tool**: Create React App
+- **State Management**: Redux 5.0.1
 - **Styling**: Tailwind CSS 3.4.18
+- **Maps**: React Leaflet 5.0.0, Leaflet 1.9.4
 - **Backend/Database**: Supabase (PostgreSQL)
 - **Authentication**: Supabase Auth
 - **Deployment Ready**: Static site compatible with major hosting platforms
@@ -81,7 +90,7 @@ Before you begin, ensure you have the following installed:
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
-   cd drink-tonight-softuni
+   cd drink-tonight
    ```
 
 2. **Install dependencies**:
@@ -191,23 +200,29 @@ If you aren't satisfied with the build tool and configuration choices, you can `
 ## 📁 Project Structure
 
 ```
-drink-tonight-softuni/
+drink-tonight/
 ├── public/                 # Static assets
 │   ├── index.html         # HTML template
 │   └── ...
 ├── src/
 │   ├── components/        # React components
+│   │   ├── AboutUsPage.jsx
 │   │   ├── BusinessProfilePage.jsx
+│   │   ├── ContactPage.jsx
 │   │   ├── Footer.jsx
 │   │   ├── LoginModal.jsx
+│   │   ├── MapPage.jsx
 │   │   ├── Navbar.jsx
 │   │   ├── PlaceCard.jsx
 │   │   ├── PlacesSection.jsx
 │   │   ├── ProfilePage.jsx
-│   │   ├── RegisterModal.jsx
-│   │   └── ReservationModal.jsx
+│   │   └── RegisterModal.jsx
 │   ├── lib/
-│   │   └── supabaseClient.js  # Supabase client configuration
+│   │   ├── errorTranslations.js  # Error message translations
+│   │   └── supabaseClient.js     # Supabase client configuration
+│   ├── store/
+│   │   ├── store.js       # Redux store configuration
+│   │   └── store.test.js  # Store tests
 │   ├── App.js             # Main application component
 │   ├── index.js           # Application entry point
 │   └── index.css          # Global styles
@@ -275,7 +290,7 @@ This React application can be deployed to any static hosting service. Here are i
 
 2. **Add to package.json**:
    ```json
-   "homepage": "https://yourusername.github.io/drink-tonight-softuni",
+   "homepage": "https://yourusername.github.io/drink-tonight",
    "scripts": {
      "predeploy": "npm run build",
      "deploy": "gh-pages -d build"
@@ -391,10 +406,11 @@ This React application can be deployed to any static hosting service. Here are i
 
 ### Account Types
 
-- **Normal Users**: Can browse places and make reservations
-- **Business Accounts**: Can manage places and view reservations
-  - Set `accountType: 'business'` in user metadata during registration
-  - Or update via Supabase dashboard: `auth.users` table → `raw_user_meta_data` → `accountType: 'business'`
+- **Normal Users**: Can browse places and make reservations. Profile tabs: Settings, Reservations, Favorites (coming soon)
+- **Business Accounts**: Can manage places and view reservations. Profile tabs: Settings, Places, Reservations
+  - Select account type during registration (normal or business)
+  - Or update via Supabase dashboard: `auth.users` table → `raw_user_meta_data` → `accountType: 'business'` or `'firm'`
+  - Business accounts receive real-time reservation notifications in the navbar
 
 ### Database Considerations
 
@@ -409,6 +425,8 @@ This React application can be deployed to any static hosting service. Here are i
 - Consider using a CDN for static assets
 - YouTube embeds may impact page load time
 - Large video files should be hosted externally
+- Map page currently uses demo data (not connected to database)
+- Reservation notifications poll every 30 seconds (consider WebSockets for production)
 
 ### Browser Support
 
